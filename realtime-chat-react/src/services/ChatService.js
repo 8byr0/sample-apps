@@ -1,70 +1,63 @@
 import { Observable } from 'rxjs/Observable';
-import { combineLatest } from 'rxjs';
+import { combineLatest, throwError } from 'rxjs';
 import { store } from '../helpers/store';
 import { and, or, cond } from "space-api";
 import * as _ from 'lodash'
 import { config } from './config';
 
 
-const sendMessage = (partnerID, text) => {
-    // Get the input field values
-    return Observable.create((observer) => {
-        const user = store.getState().user.user;
+const sendMessage = async (partnerID, text) => {
+    const user = store.getState().user.user;
 
-        // Add todo to the database
-        config.db.insert("messages")
-            .one({ _id: config.generateId(), text: text, read: false, to: partnerID, from: user._id, time: new Date() })
-            .then(res => {
-                // Verify if get request is successful
-                if (res.status !== 200) {
-                    console.log("Error occurred")
-                    return;
+    await config.db.insert("messages")
+        .one({ _id: config.generateId(), text: text, read: false, to: partnerID, from: user._id, time: new Date() })
+        .then(res => {
+            // Verify if get request is successful
+            if (res.status !== 200) {
+                throw "User not allowed to sign in";
+                return;
+            }
+            return res;
+        }).catch((error) => {
+            throw error;
+        });
+}
+
+const getMessages = async () => {
+    const user = store.getState().user.user;
+
+    const condition = or(cond("to", "==", user._id), cond("from", "==", user._id));
+
+    await config.db.get("messages").where(condition).apply().then(res => {
+        if (res.status === 200) {
+            let messages = {}
+
+            res.data.result.forEach((elt) => {
+                const key = (elt.from === user._id) ? elt.to : elt.from
+                if (!messages[key]) {
+                    messages[key] = []
                 }
-                observer.next(res)
-            });
-    })
+                messages[key].push(elt)
+            })
+            messages["ALL"] = []
+
+            return messages;
+        }
+    }).catch((err) => { throw err });
 }
 
-const getMessages = () => {
+const getUsers = async () => {
     const user = store.getState().user.user;
+    const condition = cond("_id", "!=", user._id);
 
-    return Observable.create((observer) => {
-        const condition = or(cond("to", "==", user._id), cond("from", "==", user._id));
+    await config.db.get("users").where(condition).apply().then(res => {
+        if (res.status === 200) {
+            let users = convertRawUsersToHasedObject(res.data.result)
 
-        config.db.get("messages").where(condition).apply().then(res => {
-            if (res.status === 200) {
-                let messages = {}
-
-                res.data.result.forEach((elt) => {
-                    const key = (elt.from === user._id) ? elt.to : elt.from
-                    if (!messages[key]) {
-                        messages[key] = []
-                    }
-                    messages[key].push(elt)
-                })
-                messages["ALL"] = []
-
-                observer.next(messages);
-                return;
-            }
-        });
-    });
-}
-
-const getUsers = () => {
-    const user = store.getState().user.user;
-
-    return Observable.create((observer) => {
-        const condition = cond("_id", "!=", user._id);
-
-        config.db.get("users").where(condition).apply().then(res => {
-            if (res.status === 200) {
-                let users = convertRawUsersToHasedObject(res.data.result)
-
-                observer.next(users);
-                return;
-            }
-        });
+            return users;
+        }
+    }).catch((err) => {
+        throw err
     });
 }
 
@@ -77,27 +70,21 @@ const convertRawUsersToHasedObject = (rawUsers) => {
     return users;
 }
 
-const getChats = (localUserID) => {
+const getChats = async (localUserID) => {
     const user = store.getState().user.user;
 
-    return Observable.create((observer) => {
-        const condition = or(
-            cond("from", "==", user._id),
-            cond("to", "==", user._id),
-            cond("to", "==", "ALL")
-        );
+    const condition = or(
+        cond("from", "==", user._id),
+        cond("to", "==", user._id),
+        cond("to", "==", "ALL")
+    );
 
-        config.db.get("chats").where(condition).apply().then(res => {
-            if (res.status === 200) {
-                observer.next(res.data.result);
-                return;
-            }
-        })
-            .catch(ex => {
-                // Exception occured while processing request
-            });
+    await config.db.get("chats").where(condition).apply().then(res => {
+        if (res.status === 200) {
+            return res.data.result;
+        }
+    }).catch((err) => { throw err });
 
-    });
 }
 
 const startMessagesRealtime = (partnerID) => {
@@ -174,6 +161,8 @@ const getChatsList = () => {
                 // chats = _.reject(chats, chat => chat.user._id === activeUser._id)
 
                 observer.next(_.values(chats))
+            }, (error) => {
+                console.log(error)
             })
 
     });
@@ -185,7 +174,7 @@ export const ChatService = {
     getChats,
     getUsers,
     getMessages,
-    getChatsList,
+    // getChatsList,
     sendMessage,
     startMessagesRealtime,
     startChatsRealtime,

@@ -75,7 +75,7 @@ const ChatPage = (props) => {
                 onIdle={setInactive}
                 onAction={setActive}
                 debounce={250}
-                timeout={5000 } />
+                timeout={5000} />
             <NavBar />
             < Drawer classes={{
                 paper: classes.drawerPaper,

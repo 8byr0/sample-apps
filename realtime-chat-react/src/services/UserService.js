@@ -18,7 +18,7 @@ export const rejectionCause = {
  */
 async function updateUser(user) {
     await config.db.updateOne('users').where(cond('_id', '==', user._id))
-        .set(user).apply().then(res => ({ res }), err => ({ err }));
+        .set(user).apply().then(res => ({ res })).catch(err => { throw err });
 }
 
 function login(username, password) {

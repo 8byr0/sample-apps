@@ -1,6 +1,7 @@
 import { ChatService } from "../services/ChatService";
 import { ChatConstants } from "../constants/chat.constants";
 import { store } from "../helpers/store";
+import { notificationActions } from "./notifications.actions";
 
 /**
  * Stop all existing livequeries.
@@ -60,7 +61,7 @@ const addChat = (chat) => ({
  */
 const listenToThread = (partnerID) => {
     return dispatch => {
-        const currentLiveQuery = ChatService.startMessagesRealtime(partnerID).subscribe(
+        const currentLiveQuery = ChatService.startMessagesRealtime(partnerID).then(
             /**
              * Callback triggered on new messages in given thread
              * @param {Array<Object>} docs 
@@ -74,15 +75,15 @@ const listenToThread = (partnerID) => {
                     dispatch({ type: ChatConstants.SET_PARTNER_MESSAGES, partnerID: partnerID, messages: messages })
                 }
 
-            },
-            /**
-             * Callback triggered when something goes wrong
-             * @param {*} err
-             */
-            (err) => {
-                // TODO handle error
-                console.log('Operation failed:', err)
-            })
+            }).catch(
+
+                /**
+                 * Callback triggered when something goes wrong
+                 * @param {*} err
+                 */
+                (error) => {
+                    dispatch(notificationActions.failureMessage("An error occurred when listening to chat messages: " + error))
+                })
 
         dispatch({
             type: ChatConstants.SAVE_LIVE_QUERY,
@@ -97,7 +98,7 @@ const listenToThread = (partnerID) => {
  */
 const listenToUsers = () => {
     return dispatch => {
-        const newUsersListener = ChatService.startUsersRealtime().subscribe(
+        const newUsersListener = ChatService.startUsersRealtime().then(
             /**
              * Callback triggered on new users registered
              * @param {Array<Object>} docs 
@@ -112,15 +113,16 @@ const listenToUsers = () => {
                 users["ALL"] = { _id: "ALL", name: 'ALL' }
 
                 dispatch({ type: ChatConstants.SET_USERS, users });
-            },
+            }).catch(
 
-            /**
-             * Callback triggered when something goes wrong
-             * @param {*} err
-             */
-            (err) => {
-                // TODO handle this
-            })
+
+                /**
+                 * Callback triggered when something goes wrong
+                 * @param {*} err
+                 */
+                (error) => {
+                    dispatch(notificationActions.failureMessage("An error occurred when listening to new users: " + error))
+                })
 
         dispatch({
             type: ChatConstants.SET_INCOMING_USERS_LISTENER,
@@ -137,24 +139,24 @@ const listenToUsers = () => {
  */
 const listenToChats = () => {
     return dispatch => {
-        const newChatsListener = ChatService.startChatsRealtime().subscribe(
+        const newChatsListener = ChatService.startChatsRealtime().then(
             /**
              * Callback triggered on new messages in given thread
              * @param {Array<Object>} docs 
              * @param {*} type 
              */
             (docs, type) => {
-                dispatch({type: ChatConstants.SET_CHATS, docs})
-                // console.log("Chats list has been updated", docs)
-            },
+                dispatch({ type: ChatConstants.SET_CHATS, docs })
+            }).catch(
 
-            /**
-             * Callback triggered when something goes wrong
-             * @param {*} err
-             */
-            (err) => {
-                // TODO handle this
-            })
+
+                /**
+                 * Callback triggered when something goes wrong
+                 * @param {*} error
+                 */
+                (error) => {
+                    dispatch(notificationActions.failureMessage("An error occurred when listening to chats: " + error))
+                })
 
         dispatch({
             type: ChatConstants.SET_INCOMING_CHATS_LISTENER,
@@ -165,7 +167,7 @@ const listenToChats = () => {
 
 const retrieveUsers = (launchRealTime = false) => {
     return dispatch => {
-        ChatService.getUsers().subscribe(
+        ChatService.getUsers().then(
             (users) => {
                 users["ALL"] = { _id: "ALL", name: 'ALL' }
 
@@ -177,31 +179,34 @@ const retrieveUsers = (launchRealTime = false) => {
 
                     }
                 }
-            },
-            (error) => { }
-        )
+            }).catch(
+                (error) => {
+                    dispatch(notificationActions.failureMessage("An error occurred when retrieving users: " + error))
+                }
+            )
     }
 }
 const retrieveChats = () => {
     return dispatch => {
-        ChatService.getChats().subscribe(
-            (chats) => { dispatch({ type: ChatConstants.SET_CHATS, chats }) },
+        ChatService.getChats().then(
+            (chats) => { dispatch({ type: ChatConstants.SET_CHATS, chats }) }
+        ).catch(
             (error) => {
-                // TODO HANDLE THIS
-             }
+                dispatch(notificationActions.failureMessage("An error occurred when retrieving chats: " + error))
+            }
         )
     }
 }
 const retrieveMessages = () => {
     return dispatch => {
-        ChatService.getMessages().subscribe(
+        ChatService.getMessages().then(
             (messages) => {
                 dispatch({ type: ChatConstants.SET_MESSAGES, messages })
-            },
-            (error) => { 
-                // TODO handle this
-            }
-        )
+            }).catch(
+                (error) => {
+                    dispatch(notificationActions.failureMessage("An error occurred when retrieving messages: " + error))
+                }
+            )
     }
 }
 
@@ -247,6 +252,7 @@ const sendMessage = (partnerID, text) => {
                     type: ChatConstants.SEND_MESSAGE_FAILURE,
                     error: error.toString()
                 });
+                dispatch(notificationActions.failureMessage("Unable to send message, please try again. Details: " + error))
             }
         );
     };
